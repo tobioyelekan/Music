@@ -21,6 +21,7 @@ public class Storage {
     private SharedPreferences.Editor editor;
 
     public static final String KEY_SONGS = "songs";
+    public static final String KEY_STATUS = "status";
     public static final String KEY_INDEX = "index";
     public static final String KEY_SONG_ID = "id";
     public static final String KEY_LAST_TITLE = "title";
@@ -48,6 +49,12 @@ public class Storage {
         }.getType();
 
         return gson.fromJson(json, type);
+    }
+
+    public void storeStatus(String status) {
+        editor = pref.edit();
+        editor.putString(KEY_STATUS, status);
+        editor.apply();
     }
 
     public void storeAudioIndex(int index) {
@@ -80,6 +87,10 @@ public class Storage {
 
     public String getLastArtist() {
         return pref.getString(KEY_LAST_ARTIST, null);
+    }
+
+    public String getStatus() {
+        return pref.getString(KEY_STATUS, null);
     }
 
     public int loadAudioIndex() {

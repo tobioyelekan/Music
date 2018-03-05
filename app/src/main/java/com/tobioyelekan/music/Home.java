@@ -198,6 +198,7 @@ public class Home extends AppCompatActivity implements MyMusic.OnFragmentInterac
 
         if (bound) {
             storage.storeAudioIndex(audioIndex);
+
             Intent intent = new Intent(getBaseContext(), MyMusicPlayerService.class);
             intent.setAction(Constants.ACTION.STARTFOREGROUND_ACTION);
             startService(intent);
@@ -272,8 +273,6 @@ public class Home extends AppCompatActivity implements MyMusic.OnFragmentInterac
         LocalBroadcastManager.getInstance(this).unregisterReceiver(updateReceiver);
         if (bound) {
             unbindService(serviceConnection);
-            //service is active
-            player.stopSelf();
         }
     }
 }

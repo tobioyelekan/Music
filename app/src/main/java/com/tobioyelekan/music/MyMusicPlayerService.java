@@ -41,6 +41,7 @@ public class MyMusicPlayerService extends Service implements MediaPlayer.OnCompl
 
     private final IBinder iBinder = new LocalBinder();
     RemoteViews views;
+    Storage storage;
     private boolean ongoingCall = false;
     private PhoneStateListener phoneStateListener;
     private TelephonyManager telephonyManager;
@@ -59,7 +60,7 @@ public class MyMusicPlayerService extends Service implements MediaPlayer.OnCompl
         super.onCreate();
 
         setUpNotification();
-        activeAudio = new Storage(getApplicationContext()).getSongs().get(new Storage(getBaseContext()).loadAudioIndex());
+        storage = new Storage(getApplicationContext());
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         mediaPlayer = new MediaPlayer();
         mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
@@ -86,13 +87,13 @@ public class MyMusicPlayerService extends Service implements MediaPlayer.OnCompl
     private void initMediaPlayer() {
         try {
             mediaPlayer.setDataSource(getApplicationContext(), Uri.parse(activeAudio.get(5)));
+            mediaPlayer.prepareAsync();
         } catch (IOException | IllegalArgumentException | SecurityException e) {
             e.printStackTrace();
             Toast.makeText(getApplicationContext(), e.getMessage(), Toast.LENGTH_LONG).show();
             stopForeground(false);
             stopSelf();
         }
-        mediaPlayer.prepareAsync();
     }
 
     private void playMedia() {
@@ -102,6 +103,7 @@ public class MyMusicPlayerService extends Service implements MediaPlayer.OnCompl
     }
 
     private void stopMedia() {
+        storage.storeStatus("paused");
         if (mediaPlayer == null) return;
         if (mediaPlayer.isPlaying()) {
             mediaPlayer.stop();
@@ -109,6 +111,7 @@ public class MyMusicPlayerService extends Service implements MediaPlayer.OnCompl
     }
 
     private void pauseMedia() {
+        storage.storeStatus("paused");
         if (mediaPlayer.isPlaying()) {
             mediaPlayer.pause();
             resumePosition = mediaPlayer.getCurrentPosition();
@@ -116,6 +119,7 @@ public class MyMusicPlayerService extends Service implements MediaPlayer.OnCompl
     }
 
     private void resumeMedia() {
+        storage.storeStatus("play");
         if (!mediaPlayer.isPlaying()) {
             mediaPlayer.seekTo(resumePosition);
             mediaPlayer.start();
@@ -180,7 +184,7 @@ public class MyMusicPlayerService extends Service implements MediaPlayer.OnCompl
 //            mediaPlayer.reset();
 //        }
 //        try {
-//            Storage storage = new Storage(getApplicationContext());
+//            Storage storage = storage;
 //            Toast.makeText(getApplicationContext(), "startCommand", Toast.LENGTH_SHORT).show();
 //            audioList = storage.getSongs();
 //            audioIndex = storage.loadAudioIndex();
@@ -229,9 +233,9 @@ public class MyMusicPlayerService extends Service implements MediaPlayer.OnCompl
                 break;
             case Constants.ACTION.STOPFOREGROUND_ACTION:
                 Toast.makeText(getApplicationContext(), "closeup", Toast.LENGTH_SHORT).show();
-                stopForeground(true);
                 pauseMedia();
                 views.setImageViewResource(R.id.playpause, R.drawable.play);
+                stopForeground(true);
                 sendPlayInfoBroadcast("paused");
                 break;
         }
@@ -244,8 +248,8 @@ public class MyMusicPlayerService extends Service implements MediaPlayer.OnCompl
 
             Toast.makeText(getApplicationContext(), Integer.toString(audioIndex), Toast.LENGTH_SHORT).show();
             activeAudio = audioList.get(audioIndex);
-            new Storage(getApplicationContext()).storeTitle(activeAudio.get(0));
-            new Storage(getApplicationContext()).storeArtist(activeAudio.get(1));
+            storage.storeTitle(activeAudio.get(0));
+            storage.storeArtist(activeAudio.get(1));
 
             stopMedia();
             mediaPlayer.reset();
@@ -254,7 +258,7 @@ public class MyMusicPlayerService extends Service implements MediaPlayer.OnCompl
             sendPlayInfoBroadcast("play");
         } catch (NullPointerException e) {
             stopSelf();
-            stopForeground(true);
+//            stopForeground(true);
             sendPlayInfoBroadcast("paused");
         }
     }
@@ -271,6 +275,7 @@ public class MyMusicPlayerService extends Service implements MediaPlayer.OnCompl
                 sendPlayInfoBroadcast("paused");
             } else {
                 resumeMedia();
+
                 views.setImageViewResource(R.id.playpause, R.drawable.pause);
                 sendPlayInfoBroadcast("play");
             }
@@ -285,8 +290,8 @@ public class MyMusicPlayerService extends Service implements MediaPlayer.OnCompl
 
             Toast.makeText(getApplicationContext(), Integer.toString(audioIndex), Toast.LENGTH_SHORT).show();
             activeAudio = audioList.get(audioIndex);
-            new Storage(getApplicationContext()).storeTitle(activeAudio.get(0));
-            new Storage(getApplicationContext()).storeArtist(activeAudio.get(1));
+            storage.storeTitle(activeAudio.get(0));
+            storage.storeArtist(activeAudio.get(1));
 
             stopMedia();
             mediaPlayer.reset();
@@ -301,17 +306,16 @@ public class MyMusicPlayerService extends Service implements MediaPlayer.OnCompl
 
     public void play() {
         try {
-            audioIndex = new Storage(getApplicationContext()).loadAudioIndex();
-            audioList = new Storage(getApplicationContext()).getSongs();
+            audioIndex = storage.loadAudioIndex();
+            audioList = storage.getSongs();
 
             if (audioIndex != -1 && audioIndex < audioList.size()) {
                 activeAudio = audioList.get(audioIndex);
-                new Storage(getApplicationContext()).storeTitle(activeAudio.get(0));
-                new Storage(getApplicationContext()).storeArtist(activeAudio.get(1));
-                Log.e("DATA", activeAudio.get(5));
+                storage.storeTitle(activeAudio.get(0));
+                storage.storeArtist(activeAudio.get(1));
             } else {
                 stopSelf();
-                stopForeground(true);
+//                stopForeground(true);
             }
 
             //A PLAY_NEW_AUDIO action received
@@ -323,16 +327,13 @@ public class MyMusicPlayerService extends Service implements MediaPlayer.OnCompl
                 showNotification(activeAudio.get(0), activeAudio.get(1));
             } else {
                 //Could not gain focus
-                stopSelf();
-                stopForeground(true);
                 sendPlayInfoBroadcast("paused");
+                stopSelf();
             }
         } catch (NullPointerException e) {
             stopSelf();
-            stopForeground(true);
+//            stopForeground(true);
         }
-
-
     }
 
     @Override
@@ -444,8 +445,8 @@ public class MyMusicPlayerService extends Service implements MediaPlayer.OnCompl
     private BroadcastReceiver playNewAudio = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            audioIndex = new Storage(getApplicationContext()).loadAudioIndex();
-            audioList = new Storage(getApplicationContext()).getSongs();
+            audioIndex = storage.loadAudioIndex();
+            audioList = storage.getSongs();
             if (audioIndex != -1 && audioIndex < audioList.size()) {
                 activeAudio = audioList.get(audioIndex);
                 Log.e("DATA", activeAudio.get(5));
@@ -486,7 +487,7 @@ public class MyMusicPlayerService extends Service implements MediaPlayer.OnCompl
         unregisterReceiver(becomingNoisyReceiver);
         unregisterReceiver(playNewAudio);
 
-//        new Storage(getApplicationContext()).clearCache();
+//        storage.clearCache();
     }
 
     private void setUpNotification() {

@@ -22,6 +22,7 @@ import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.PopupMenu;
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -42,6 +43,7 @@ public class MyMusic extends Fragment {
     ContentResolver musicResolver;
     RecyclerView recycler;
     RVAdapter rvAdapter;
+    View view;
     RecyclerView.LayoutManager layoutManager;
     public ArrayList<ArrayList<String>> musics = new ArrayList<>();
 
@@ -51,7 +53,7 @@ public class MyMusic extends Fragment {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        setRetainInstance(true);
+//        setRetainInstance(true);
         super.onCreate(savedInstanceState);
     }
 
@@ -70,6 +72,8 @@ public class MyMusic extends Fragment {
         rvAdapter.setOnItemClickListener(new RVAdapter.OnRvItemClickListener() {
             @Override
             public void onRvItemClickListener(ArrayList<String> data, int position) {
+                Toast.makeText(getActivity(), "i was clicked", Toast.LENGTH_SHORT).show();
+                storage.storeSongs(musics);
                 mListener.onFragmentInteraction(position);
 //                Snackbar.make(getActivity().findViewById(R.id.main_content), "music id: " + data.get(4), Snackbar.LENGTH_LONG).show();
             }
@@ -141,7 +145,6 @@ public class MyMusic extends Fragment {
                 musics.add(tempmusic);
             }
             musicCursor.close();
-            storage.storeSongs(musics);
         }
 
         rvAdapter.notifyDataSetChanged();
@@ -168,6 +171,8 @@ public class MyMusic extends Fragment {
     public void onResume() {
         super.onResume();
         if (rvAdapter != null) {
+
+            Toast.makeText(getActivity(), "i populated again", Toast.LENGTH_SHORT).show();
             populate();
         }
     }

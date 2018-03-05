@@ -1,20 +1,30 @@
 package com.tobioyelekan.music;
 
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.ContentResolver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.provider.MediaStore;
 import android.support.v4.app.FragmentManager;
+import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.CardView;
 import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.Toolbar;
+import android.text.TextUtils;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -23,13 +33,19 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Locale;
 
-public class ListSong extends AppCompatActivity {
+public class ListSong extends AppCompatActivity implements View.OnClickListener {
 
     String mode, mode2;
     RecyclerView recycler;
+    Storage storage;
+    private MyMusicPlayerService player;
     RVAdapter rvAdapter;
     TextView empty;
+    boolean bound = false;
     String[] data;
+    CardView playinfo;
+    ImageView prev, playpause, fwd, img;
+    TextView title, artist;
     RecyclerView.LayoutManager layoutManager;
     public ArrayList<ArrayList<String>> musics = new ArrayList<>();
 
@@ -41,6 +57,22 @@ public class ListSong extends AppCompatActivity {
         setSupportActionBar(toolbar);
 
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+
+        LocalBroadcastManager.getInstance(this).registerReceiver(updateReceiver, new IntentFilter(Constants.ACTION.PLAY_INFO));
+
+        storage = new Storage(this);
+        playinfo = (CardView) findViewById(R.id.playinfo);
+        prev = (ImageView) findViewById(R.id.prev);
+        playpause = (ImageView) findViewById(R.id.playpause);
+        fwd = (ImageView) findViewById(R.id.fwd);
+
+        title = (TextView) findViewById(R.id.title);
+        artist = (TextView) findViewById(R.id.artist);
+
+        playinfo.setOnClickListener(this);
+        prev.setOnClickListener(this);
+        playpause.setOnClickListener(this);
+        fwd.setOnClickListener(this);
 
         layoutManager = new LinearLayoutManager(this);
         recycler = (RecyclerView) findViewById(R.id.recycler);
@@ -63,11 +95,25 @@ public class ListSong extends AppCompatActivity {
             else listSong(data[0], data[2]);
         }
 
-
         rvAdapter.setOnItemClickListener(new RVAdapter.OnRvItemClickListener() {
             @Override
             public void onRvItemClickListener(ArrayList<String> data, int position) {
-                Toast.makeText(ListSong.this, "music id: " + data.get(4), Toast.LENGTH_SHORT).show();
+//                Toast.makeText(ListSong.this, "music id: " + data.get(4), Toast.LENGTH_SHORT).show();
+
+                storage.storeSongs(musics);
+                Intent intent = new Intent(Constants.ACTION.PLAY_INFO);
+                intent.putExtra("title", data.get(0));
+                intent.putExtra("artist", data.get(1));
+                intent.putExtra("playStatus", "play");
+
+                LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
+
+                storage.storeAudioIndex(position);
+                Intent intent2 = new Intent(getBaseContext(), MyMusicPlayerService.class);
+                intent2.setAction(Constants.ACTION.STARTFOREGROUND_ACTION);
+                startService(intent2);
+
+                updateBottom();
             }
         });
 
@@ -90,7 +136,48 @@ public class ListSong extends AppCompatActivity {
         });
 
         recycler.setAdapter(rvAdapter);
+
+        Intent service = new Intent(this, MyMusicPlayerService.class);
+        bindService(service, serviceConnection, Context.BIND_AUTO_CREATE);
     }
+
+
+    @Override
+    public void onClick(View v) {
+        switch (v.getId()) {
+            case R.id.playinfo:
+                Intent current = new Intent(ListSong.this, CurrentlyPlaying.class);
+                startActivity(current);
+                break;
+            case R.id.prev:
+                player.processPrev();
+                break;
+            case R.id.playpause:
+                player.processPlayPause();
+                break;
+            case R.id.fwd:
+                player.processNext();
+                break;
+        }
+    }
+
+    public void updateBottom() {
+        title.setText(storage.getSongs().get(storage.loadAudioIndex()).get(0));
+        artist.setText(storage.getSongs().get(storage.loadAudioIndex()).get(1));
+        playpause.setImageResource(R.drawable.pause);
+        playinfo.setVisibility(View.VISIBLE);
+    }
+
+    private BroadcastReceiver updateReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            title.setText(intent.getStringExtra("title"));
+            artist.setText(intent.getStringExtra("artist"));
+            String status = intent.getStringExtra("playStatus");
+            if (status.equals("play")) playpause.setImageResource(R.drawable.pause);
+            else playpause.setImageResource(R.drawable.play);
+        }
+    };
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -127,13 +214,22 @@ public class ListSong extends AppCompatActivity {
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
             case android.R.id.home:
-                super.onBackPressed();
+                Intent intent = new Intent(this, Home.class);
+                startActivity(intent);
+//                super.onBackPressed();@}
+
                 return true;
             case R.id.add:
                 Toast.makeText(this, "add", Toast.LENGTH_SHORT).show();
                 return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public void onBackPressed() {
+        Intent intent = new Intent(this, Home.class);
+        startActivity(intent);
     }
 
     public void listSong(String mode, String id) {
@@ -177,9 +273,7 @@ public class ListSong extends AppCompatActivity {
             }
             musicCursor.close();
         }
-
         rvAdapter.notifyDataSetChanged();
-
     }
 
     public void getPlaylistMembers(long playlistId) {
@@ -228,7 +322,56 @@ public class ListSong extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+
+        if (storage.getStatus().equals("play")) playpause.setImageResource(R.drawable.pause);
+        else playpause.setImageResource(R.drawable.play);
+
         if (data[0].equals("playlist")) getPlaylistMembers(Long.parseLong(data[2]));
         else listSong(data[0], data[2]);
+
+        if (TextUtils.isEmpty(new Storage(this).getLastArtist()) || TextUtils.isEmpty(new Storage(this).getLastTitle())) {
+            playinfo.setVisibility(View.GONE);
+        } else {
+            playinfo.setVisibility(View.VISIBLE);
+            title.setText(new Storage(this).getLastTitle());
+            artist.setText(new Storage(this).getLastArtist());
+        }
+    }
+
+    private ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            MyMusicPlayerService.LocalBinder binder = (MyMusicPlayerService.LocalBinder) service;
+            player = binder.getService();
+            bound = true;
+
+            Toast.makeText(ListSong.this, "Service Bound2", Toast.LENGTH_SHORT).show();
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            bound = false;
+        }
+    };
+
+    @Override
+    public void onSaveInstanceState(Bundle savedInstanceState) {
+        savedInstanceState.putBoolean("ServiceState", bound);
+        super.onSaveInstanceState(savedInstanceState);
+    }
+
+    @Override
+    public void onRestoreInstanceState(Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+        bound = savedInstanceState.getBoolean("ServiceState");
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(updateReceiver);
+        if (bound) {
+            unbindService(serviceConnection);
+        }
     }
 }
